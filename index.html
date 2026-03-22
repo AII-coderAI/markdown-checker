@@ -169,29 +169,26 @@
 
         let currentOutput = '';
         let currentAbortController = null;
-        let debounceTimer; // 恢复防抖定时器
+        let debounceTimer; 
 
-        // 核心重构：用极度严厉的指令限制 AI 的发散性，修复乱加 mark 和乱改词语的 bug
-        const SYSTEM_INSTRUCTION = `你是一个严谨的 Markdown 格式审校程序。你的任务是接收原始文本，严格按照以下两条规则进行处理，并且**必须且只能**将修改过的地方用 <mark> 和 </mark> 标签包裹。
+        // 【核心修复】极度严厉的防发散提示词，明确划定红线
+        const SYSTEM_INSTRUCTION = `你是一个严谨的 Markdown 格式审校程序。你的任务是接收原始文本，严格按照以下规则处理，并且必须且只能将【真正修改过】的地方用 <mark> 和 </mark> 标签包裹。
 
 【处理范围限制】（仅限以下两点，绝对不允许修改或标亮其他任何内容！）：
-1. 标点符号规范：检查全角与半角。中文语境下的标点修改为全角，英文和数字语境下的标点修改为半角。
-2. 数学与化学符号：将未使用 LaTeX 语法的数学式、数学符号、化学式、化学符号转换为标准的 LaTeX 语法。行内公式用 $...$，独立公式用 $$...$$，化学式用 \\ce{...}。
+1. 标点符号规范：中文语境下的标点修改为全角，英文和数字语境下的标点修改为半角。
+2. 数学与化学符号：将【未使用】 LaTeX 语法的数学式、化学式转换为标准的 LaTeX 语法（行内公式用 $...$，独立公式用 $$...$$，化学式用 \\ce{...}）。
 
 【极其严格的红线要求】：
 - 绝对不准修改不需要格式化的常规文字。
-- 如果一个词语、句子或段落完全没有格式错误，**绝对不能**用 <mark> 标签包裹它。
-- <mark> 标签只能紧紧包裹在你修改过的那个标点或那个公式上。
+- 如果原文中的数学式或化学式【已经使用了】正确的 LaTeX 语法，绝对不能用 <mark> 标签包裹它！直接原样输出。
+- 绝对不能用 <mark> 标签包裹纯空白字符（如空格、换行符）。
+- <mark> 标签只能紧紧包裹在你真正做出了修改的错用标点或转换后的公式上。
 - 保持原文的换行、段落和空格结构绝对不变。
-- 只输出处理后的文本，不要带有任何解释或废话。
-
-【正反示例】：
-错误处理示范 (乱加标亮)：<mark>水分子是</mark> $\\ce{H2O}$。
-正确处理示范 (精准标亮)：水分子是 <mark>$\\ce{H2O}$</mark><mark>，</mark>质能方程 <mark>$E=mc^2$</mark>。`;
+- 只输出处理后的纯文本，不要带有任何解释或废话。`;
 
         const DEFAULT_MODELS = {
             gemini: 'gemini-1.5-flash',
-            siliconflow: 'deepseek-ai/DeepSeek-V3' // 默认设为一个强力的模型
+            siliconflow: 'deepseek-ai/DeepSeek-V3'
         };
 
         const MODEL_LISTS = {
@@ -201,7 +198,7 @@
                 'gemini-2.0-flash'
             ],
             siliconflow: [
-                'deepseek-ai/DeepSeek-V3.1-Terminus', // 新增模型
+                'deepseek-ai/DeepSeek-V3.1-Terminus', // 【新增】
                 'deepseek-ai/DeepSeek-V3',
                 'Qwen/Qwen2.5-72B-Instruct',
                 'Qwen/Qwen2.5-32B-Instruct',
@@ -329,7 +326,6 @@
                 return;
             }
 
-            // 核心功能：如果有还在路上的请求，立刻掐断！保证极速响应
             if (currentAbortController) {
                 currentAbortController.abort();
             }
@@ -378,6 +374,11 @@
                     resultText = (await response.json()).choices[0].message.content;
                 }
 
+                // 【核心修复】在前端对结果进行二次清理，防御 AI 的格式幻觉
+                // 1. 剔除包含纯空白或换行符的 mark 标签
+                resultText = resultText.replace(/<mark>([\s\n]+)<\/mark>/g, '$1');
+                resultText = resultText.replace(/<mark><\/mark>/g, '');
+
                 currentOutput = resultText;
                 renderPreview(resultText);
                 
@@ -388,7 +389,7 @@
                 setStatus('success', '已优化');
 
             } catch (error) {
-                if (error.name === 'AbortError') return; // 用户还在打字，忽略被掐断的报错
+                if (error.name === 'AbortError') return; 
                 console.error(error);
                 setStatus('error', '检查失败: ' + error.message);
                 preview.style.opacity = '1';
@@ -431,7 +432,6 @@
             }
         }
 
-        // 恢复自动防抖监听（停顿 1.2 秒后自动发送，配合 AbortController 绝不拥堵）
         editor.addEventListener('input', () => {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(processText, 1200); 
