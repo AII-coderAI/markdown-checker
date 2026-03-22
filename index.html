@@ -171,7 +171,6 @@
         let currentAbortController = null;
         let debounceTimer; 
 
-        // 【核心修复】极度严厉的防发散提示词，明确划定红线
         const SYSTEM_INSTRUCTION = `你是一个严谨的 Markdown 格式审校程序。你的任务是接收原始文本，严格按照以下规则处理，并且必须且只能将【真正修改过】的地方用 <mark> 和 </mark> 标签包裹。
 
 【处理范围限制】（仅限以下两点，绝对不允许修改或标亮其他任何内容！）：
@@ -186,9 +185,10 @@
 - 保持原文的换行、段落和空格结构绝对不变。
 - 只输出处理后的纯文本，不要带有任何解释或废话。`;
 
+        // 更新默认模型配置
         const DEFAULT_MODELS = {
             gemini: 'gemini-1.5-flash',
-            siliconflow: 'deepseek-ai/DeepSeek-V3'
+            siliconflow: 'Qwen/Qwen3-VL-235B-A22B-Thinking' // 更新默认的硅基流动模型
         };
 
         const MODEL_LISTS = {
@@ -198,7 +198,8 @@
                 'gemini-2.0-flash'
             ],
             siliconflow: [
-                'deepseek-ai/DeepSeek-V3.1-Terminus', // 【新增】
+                'Qwen/Qwen3-VL-235B-A22B-Thinking', // 新增并置顶
+                'deepseek-ai/DeepSeek-V3.1-Terminus',
                 'deepseek-ai/DeepSeek-V3',
                 'Qwen/Qwen2.5-72B-Instruct',
                 'Qwen/Qwen2.5-32B-Instruct',
@@ -207,10 +208,11 @@
             ]
         };
 
+        // 【核心修复】升级了本地存储的 Key (加了 _v2)，强行清空旧的无效硅基流动配置，重置为 Gemini
         function getSettings() {
-            const provider = localStorage.getItem('ai_provider') || 'gemini';
-            const model = localStorage.getItem('ai_model_' + provider) || DEFAULT_MODELS[provider];
-            const encodedKey = localStorage.getItem('api_key_' + provider);
+            const provider = localStorage.getItem('ai_provider_v2') || 'gemini';
+            const model = localStorage.getItem('ai_model_v2_' + provider) || DEFAULT_MODELS[provider];
+            const encodedKey = localStorage.getItem('api_key_v2_' + provider);
             const key = encodedKey ? atob(encodedKey) : '';
             return { provider, model, key };
         }
@@ -228,10 +230,10 @@
             const provider = providerSelect.value;
             populateModelList(provider);
             
-            const savedModel = localStorage.getItem('ai_model_' + provider);
+            const savedModel = localStorage.getItem('ai_model_v2_' + provider);
             modelInput.value = savedModel || DEFAULT_MODELS[provider];
             
-            const encodedKey = localStorage.getItem('api_key_' + provider);
+            const encodedKey = localStorage.getItem('api_key_v2_' + provider);
             apiKeyInput.value = encodedKey ? atob(encodedKey) : '';
         }
 
@@ -256,9 +258,9 @@
             if (!key) return alert('请输入有效的 API Key');
             if (!model) return alert('请输入模型名称');
 
-            localStorage.setItem('ai_provider', provider);
-            localStorage.setItem('ai_model_' + provider, model);
-            localStorage.setItem('api_key_' + provider, btoa(key));
+            localStorage.setItem('ai_provider_v2', provider);
+            localStorage.setItem('ai_model_v2_' + provider, model);
+            localStorage.setItem('api_key_v2_' + provider, btoa(key));
 
             toggleSettings();
             setStatus('success', '配置已保存');
@@ -374,8 +376,7 @@
                     resultText = (await response.json()).choices[0].message.content;
                 }
 
-                // 【核心修复】在前端对结果进行二次清理，防御 AI 的格式幻觉
-                // 1. 剔除包含纯空白或换行符的 mark 标签
+                // 剔除包含纯空白或换行符的 mark 标签
                 resultText = resultText.replace(/<mark>([\s\n]+)<\/mark>/g, '$1');
                 resultText = resultText.replace(/<mark><\/mark>/g, '');
 
