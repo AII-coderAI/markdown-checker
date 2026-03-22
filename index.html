@@ -14,10 +14,8 @@
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
-        /* 基础字体设置 */
         body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
         
-        /* 高亮标签样式 */
         mark { 
             background-color: #fde047; 
             color: #0f172a; 
@@ -27,9 +25,6 @@
         }
         mark:hover { background-color: #facc15; }
 
-        /* * 【修复3】排版对齐优化 
-         * 强制左右两侧使用相同的等宽字体、行高和字号，实现像素级对齐
-         */
         #editor {
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             font-size: 15px;
@@ -42,9 +37,9 @@
             line-height: 1.7; 
             color: #334155; 
         }
-        .markdown-body p { margin-bottom: 1.7em; } /* 让 Markdown 的段落间距等同于原文本的两个换行符 */
+        .markdown-body p { margin-bottom: 1.7em; } 
         .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 600; color: #0f172a; margin-top: 1.7em; margin-bottom: 0.85em; }
-        .markdown-body h1 { font-size: 1.25em; } /* 缩小标题以防错位过大 */
+        .markdown-body h1 { font-size: 1.25em; } 
         .markdown-body h2 { font-size: 1.1em; }
         .markdown-body code { background-color: #f1f5f9; padding: 0.2em 0.4em; border-radius: 0.25rem; color: #db2777; }
         .markdown-body pre { background-color: #f8fafc; padding: 1em; border-radius: 0.5rem; overflow-x: auto; border: 1px solid #e2e8f0; margin-bottom: 1.7em;}
@@ -103,8 +98,10 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block text-xs font-medium text-slate-500 mb-1.5">模型名称</label>
-                    <input type="text" id="modelInput" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-colors text-sm font-mono text-slate-700">
+                    <label class="block text-xs font-medium text-slate-500 mb-1.5">模型名称 (可下拉选择或手动输入)</label>
+                    <input type="text" id="modelInput" list="modelOptions" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-colors text-sm font-mono text-slate-700" placeholder="点击右侧箭头选择...">
+                    <datalist id="modelOptions">
+                        </datalist>
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1.5">API Key</label>
@@ -127,11 +124,17 @@
                 <div class="flex items-center gap-2 text-slate-600 text-sm font-semibold tracking-wide">
                     <i data-lucide="file-edit" class="w-4 h-4 text-indigo-500"></i> 原始文本
                 </div>
-                <button onclick="clearInput()" class="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-red-500 transition-colors px-2 py-1 rounded-md hover:bg-red-50">
-                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 清空
-                </button>
+                
+                <div class="flex items-center gap-2">
+                    <button onclick="clearInput()" class="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-red-500 transition-colors px-2 py-1.5 rounded-md hover:bg-red-50">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 清空
+                    </button>
+                    <button id="checkBtn" onclick="processText()" class="flex items-center gap-1.5 text-xs font-medium text-white bg-indigo-500 hover:bg-indigo-600 shadow-sm transition-colors px-4 py-1.5 rounded-lg">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> 开始检查
+                    </button>
+                </div>
             </div>
-            <textarea id="editor" placeholder="在此输入或粘贴 Markdown 文本，系统将自动检查并格式化..." class="flex-1 w-full p-6 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none transition-all shadow-sm text-slate-700"></textarea>
+            <textarea id="editor" placeholder="在此输入或粘贴长篇 Markdown 文本。输入完毕后，点击右上角的【开始检查】按钮..." class="flex-1 w-full p-6 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none transition-all shadow-sm text-slate-700"></textarea>
         </div>
 
         <div class="flex flex-col gap-3 h-full min-h-0">
@@ -149,8 +152,8 @@
                     <div class="bg-white p-4 rounded-full shadow-sm mb-4">
                         <i data-lucide="sparkles" class="w-8 h-8 text-indigo-300"></i>
                     </div>
-                    <p class="text-sm font-medium text-slate-500">在左侧输入文本</p>
-                    <p class="text-xs text-slate-400 mt-1">右侧将自动渲染 Markdown 与 LaTeX，并高亮修正结果</p>
+                    <p class="text-sm font-medium text-slate-500">等待处理</p>
+                    <p class="text-xs text-slate-400 mt-1">在左侧输入完成后，点击【开始检查】按钮</p>
                 </div>
                 <div id="preview" class="flex-1 overflow-y-auto p-6 markdown-body hidden"></div>
             </div>
@@ -169,10 +172,12 @@
         const modelInput = document.getElementById('modelInput');
         const apiKeyInput = document.getElementById('apiKeyInput');
         const copyBtn = document.getElementById('copyBtn');
+        const modelOptions = document.getElementById('modelOptions');
 
-        let debounceTimer;
         let currentOutput = '';
-        let currentAbortController = null; // 【修复2】新增：用于取消未完成的慢速 API 请求
+        let currentAbortController = null;
+        let timerInterval = null;
+        let startTime = 0;
 
         const SYSTEM_INSTRUCTION = `你是一个专业的 Markdown 格式审校专家。你的任务是接收用户输入的文本，修正其中的格式问题，并且必须将你修改过的每一个地方，用 <mark> 和 </mark> 标签包裹起来，以便前端进行高亮显示。
 
@@ -186,10 +191,26 @@
 - 绝对不要输出除了处理后的文本之外的任何废话、问候语或解释。
 - 只返回经过修正并带有 <mark> 标签的最终 Markdown 字符串。`;
 
-        // 配置默认模型（建议 Gemini 使用 1.5-flash 获取最快速度）
+        // 默认模型清单
         const DEFAULT_MODELS = {
             gemini: 'gemini-1.5-flash',
             siliconflow: 'Qwen/Qwen2.5-72B-Instruct' 
+        };
+
+        // 供下拉列表使用的可选模型
+        const MODEL_LISTS = {
+            gemini: [
+                'gemini-1.5-flash',
+                'gemini-1.5-pro',
+                'gemini-2.0-flash'
+            ],
+            siliconflow: [
+                'Qwen/Qwen2.5-72B-Instruct',
+                'Qwen/Qwen2.5-32B-Instruct',
+                'Qwen/Qwen3.5-72B-Instruct', // 为未来的 Qwen3.5 预留
+                'deepseek-ai/DeepSeek-V3',
+                'THUDM/glm-4-9b-chat'
+            ]
         };
 
         function getSettings() {
@@ -200,8 +221,19 @@
             return { provider, model, key };
         }
 
+        function populateModelList(provider) {
+            modelOptions.innerHTML = '';
+            MODEL_LISTS[provider].forEach(modelName => {
+                const option = document.createElement('option');
+                option.value = modelName;
+                modelOptions.appendChild(option);
+            });
+        }
+
         function handleProviderChange() {
             const provider = providerSelect.value;
+            populateModelList(provider);
+            
             const savedModel = localStorage.getItem('ai_model_' + provider);
             modelInput.value = savedModel || DEFAULT_MODELS[provider];
             
@@ -213,6 +245,7 @@
             if (settingsModal.classList.contains('hidden')) {
                 const { provider, model, key } = getSettings();
                 providerSelect.value = provider;
+                populateModelList(provider);
                 modelInput.value = model;
                 apiKeyInput.value = key;
                 settingsModal.classList.remove('hidden');
@@ -235,10 +268,8 @@
 
             toggleSettings();
             setStatus('success', '配置已保存');
-            if (editor.value.trim()) processText();
         }
 
-        // 同步滚动
         let isSyncingLeft = false, isSyncingRight = false;
 
         editor.addEventListener('scroll', () => {
@@ -259,6 +290,21 @@
             isSyncingRight = false;
         });
 
+        // 定时器控件
+        function startTimer() {
+            clearInterval(timerInterval);
+            startTime = Date.now();
+            timerInterval = setInterval(() => {
+                const seconds = Math.floor((Date.now() - startTime) / 1000);
+                const timerSpan = document.getElementById('loadingTimer');
+                if(timerSpan) timerSpan.innerText = ` ${seconds}s`;
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+        }
+
         function setStatus(type, text) {
             statusIndicator.classList.remove('hidden');
             let icon = '', colorClass = '';
@@ -266,20 +312,26 @@
             if (type === 'loading') {
                 icon = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
                 colorClass = 'text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full';
-            } else if (type === 'success') {
-                icon = '<i data-lucide="check-circle-2" class="w-4 h-4"></i>';
-                colorClass = 'text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full';
-            } else if (type === 'error') {
-                icon = '<i data-lucide="alert-circle" class="w-4 h-4"></i>';
-                colorClass = 'text-red-600 bg-red-50 px-3 py-1.5 rounded-full';
+                // 加一个专门显示时间的 span
+                text = `${text} <span id="loadingTimer" class="font-mono text-xs text-indigo-400 ml-1"> 0s</span>`;
+                startTimer();
             } else {
-                icon = '<i data-lucide="check-circle-2" class="w-4 h-4"></i>';
-                colorClass = 'text-slate-500';
-                statusIndicator.classList.add('hidden');
+                stopTimer();
+                if (type === 'success') {
+                    icon = '<i data-lucide="check-circle-2" class="w-4 h-4"></i>';
+                    colorClass = 'text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full';
+                } else if (type === 'error') {
+                    icon = '<i data-lucide="alert-circle" class="w-4 h-4"></i>';
+                    colorClass = 'text-red-600 bg-red-50 px-3 py-1.5 rounded-full';
+                } else {
+                    icon = '<i data-lucide="check-circle-2" class="w-4 h-4"></i>';
+                    colorClass = 'text-slate-500';
+                    statusIndicator.classList.add('hidden');
+                }
             }
 
             statusIndicator.className = `md:flex items-center gap-2 text-sm font-medium transition-all duration-300 ${colorClass}`;
-            statusIndicator.innerHTML = `${icon} ${text}`;
+            statusIndicator.innerHTML = `${icon} <span class="flex items-center">${text}</span>`;
             lucide.createIcons();
         }
 
@@ -300,15 +352,17 @@
                 return;
             }
 
-            // 【修复2】如果有正在运行的请求，立刻阻断它，防止网络拥堵
             if (currentAbortController) {
                 currentAbortController.abort();
             }
             currentAbortController = new AbortController();
             const signal = currentAbortController.signal;
 
-            setStatus('loading', '正在自动检查...');
+            setStatus('loading', '正在处理，请稍候...');
             preview.style.opacity = '0.5';
+            const btn = document.getElementById('checkBtn');
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
 
             try {
                 let resultText = '';
@@ -318,7 +372,7 @@
                     const response = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        signal: signal, // 接入阻断信号
+                        signal: signal,
                         body: JSON.stringify({
                             systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
                             contents: [{ parts: [{ text }] }],
@@ -334,7 +388,7 @@
                     const response = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-                        signal: signal, // 接入阻断信号
+                        signal: signal,
                         body: JSON.stringify({
                             model: model,
                             messages: [
@@ -359,12 +413,13 @@
                 setStatus('success', '已优化');
 
             } catch (error) {
-                // 如果是被程序主动阻断的错误，不提示报错，默默忽略
                 if (error.name === 'AbortError') return;
-                
                 console.error(error);
                 setStatus('error', '检查失败: ' + error.message);
                 preview.style.opacity = '1';
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
             }
         }
 
@@ -372,7 +427,6 @@
             const mathBlocks = [];
             let processedText = markdownText;
             
-            // 【修复1】匹配 LaTeX，使用不会被 Markdown 识别的占位符格式
             const mathRegex = /(\$\$[\s\S]*?\$\$|\$(?!\s)[^\$]*?(?!\s)\$|\\\[[\s\S]*?\\\]|\\\(.*?\\\))/g;
             
             processedText = processedText.replace(mathRegex, (match) => {
@@ -384,7 +438,6 @@
             marked.setOptions({ breaks: true });
             let html = marked.parse(processedText);
             
-            // 还原 LaTeX 公式：使用 split 和 join 避免正则表达式特殊字符引发的问题
             mathBlocks.forEach((block, index) => {
                 const placeholder = `@@MATHBLOCK${index}@@`;
                 html = html.split(placeholder).join(block);
@@ -406,11 +459,7 @@
             }
         }
 
-        // 打字防抖时长略微延长至 1 秒，配合 AbortController 减少无效请求
-        editor.addEventListener('input', () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(processText, 1000);
-        });
+        // 彻底移除防抖打字监听代码，交给按钮控制
 
         function clearInput() {
             editor.value = '';
