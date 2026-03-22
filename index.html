@@ -5,70 +5,52 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Markdown 格式审校专家</title>
     
-    <!--
-    ====================================================================
-    部署指南 (Deployment Guide)
-    ====================================================================
-    
-    【部署到 GitHub Pages (完全免费)】
-    1. 注册/登录 GitHub (https://github.com/)
-    2. 创建一个新的公开仓库 (New Repository)，例如命名为 "markdown-checker"
-    3. 将此文件重命名为 "index.html" 并上传到该仓库
-    4. 进入仓库的 Settings -> Pages
-    5. 在 "Source" 下拉菜单中选择 "Deploy from a branch"，Branch 选择 "main" (或 master)，然后点击 Save
-    6. 等待 1-2 分钟，刷新页面，GitHub 会提供一个类似 https://<你的用户名>.github.io/markdown-checker/ 的链接，点击即可随时访问！
-
-    【部署到 Vercel (完全免费，国内访问更稳定)】
-    1. 注册/登录 Vercel (https://vercel.com/)
-    2. 在本地新建一个文件夹，将此文件重命名为 "index.html" 放入其中
-    3. 在 Vercel 控制台点击 "Add New..." -> "Project"
-    4. 选择 "Upload a folder" (上传文件夹) 或者直接将刚才的文件夹拖拽到网页中
-    5. 点击 "Deploy"
-    6. 几秒钟后，Vercel 会为你生成一个免费的 HTTPS 链接，直接访问即可！
-    ====================================================================
-    -->
-
-    <!-- Tailwind CSS (现代简约 UI 框架) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Marked.js (轻量级 Markdown 渲染库) -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    
-    <!-- KaTeX (高性能 LaTeX 数学公式渲染库) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/mhchem.min.js"></script>
-    
-    <!-- Lucide Icons (精美线性图标库) -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
         /* 基础字体设置 */
         body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
         
-        /* 高亮标签样式：唤醒目的背景色 */
+        /* 高亮标签样式 */
         mark { 
-            background-color: #fde047; /* Tailwind yellow-300 */
+            background-color: #fde047; 
             color: #0f172a; 
             padding: 0.125rem 0.25rem; 
             border-radius: 0.25rem; 
             transition: background-color 0.2s;
         }
-        mark:hover { background-color: #facc15; } /* Tailwind yellow-400 */
+        mark:hover { background-color: #facc15; }
 
-        /* Markdown 预览区排版优化 */
-        .markdown-body { line-height: 1.7; font-size: 0.95rem; color: #334155; }
-        .markdown-body p { margin-bottom: 1em; }
-        .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 600; color: #0f172a; margin-top: 1.5em; margin-bottom: 0.75em; }
-        .markdown-body h1 { font-size: 1.5em; }
-        .markdown-body h2 { font-size: 1.25em; }
-        .markdown-body code { background-color: #f1f5f9; padding: 0.2em 0.4em; border-radius: 0.25rem; font-family: ui-monospace, monospace; font-size: 0.875em; color: #db2777; }
-        .markdown-body pre { background-color: #f8fafc; padding: 1em; border-radius: 0.5rem; overflow-x: auto; border: 1px solid #e2e8f0; }
+        /* * 【修复3】排版对齐优化 
+         * 强制左右两侧使用相同的等宽字体、行高和字号，实现像素级对齐
+         */
+        #editor {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 15px;
+            line-height: 1.7;
+        }
+        
+        .markdown-body { 
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 15px; 
+            line-height: 1.7; 
+            color: #334155; 
+        }
+        .markdown-body p { margin-bottom: 1.7em; } /* 让 Markdown 的段落间距等同于原文本的两个换行符 */
+        .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 600; color: #0f172a; margin-top: 1.7em; margin-bottom: 0.85em; }
+        .markdown-body h1 { font-size: 1.25em; } /* 缩小标题以防错位过大 */
+        .markdown-body h2 { font-size: 1.1em; }
+        .markdown-body code { background-color: #f1f5f9; padding: 0.2em 0.4em; border-radius: 0.25rem; color: #db2777; }
+        .markdown-body pre { background-color: #f8fafc; padding: 1em; border-radius: 0.5rem; overflow-x: auto; border: 1px solid #e2e8f0; margin-bottom: 1.7em;}
         .markdown-body pre code { background-color: transparent; padding: 0; color: #334155; }
         .markdown-body blockquote { border-left: 4px solid #cbd5e1; padding-left: 1em; color: #64748b; font-style: italic; }
         
-        /* 优雅的自定义滚动条 */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -77,10 +59,8 @@
 </head>
 <body class="bg-slate-50 text-slate-900 h-screen flex flex-col overflow-hidden">
     
-    <!-- 顶部导航栏 -->
     <header class="bg-white border-b border-slate-200 shrink-0 shadow-sm z-10">
         <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-            <!-- Logo & Title -->
             <div class="flex items-center gap-3">
                 <div class="bg-indigo-600 p-2 rounded-xl shadow-sm shadow-indigo-200">
                     <i data-lucide="wand-2" class="w-5 h-5 text-white"></i>
@@ -88,28 +68,18 @@
                 <h1 class="text-lg md:text-xl font-bold tracking-tight text-slate-800">Markdown 格式审校专家</h1>
             </div>
             
-            <!-- 右侧控制区 -->
             <div class="flex items-center gap-2 md:gap-4">
-                <!-- 状态指示器 -->
                 <div id="statusIndicator" class="hidden md:flex items-center gap-2 text-sm font-medium text-slate-500 transition-all duration-300">
                     <i data-lucide="check-circle-2" class="w-4 h-4"></i> 就绪
                 </div>
                 
-                <!-- API Key 设置按钮 -->
                 <button onclick="toggleSettings()" class="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="设置 API Key">
                     <i data-lucide="settings" class="w-5 h-5"></i>
                 </button>
-                
-                <!-- 作者标志 -->
-                <div class="hidden md:flex items-center gap-1.5 pl-4 border-l border-slate-200 text-slate-400 text-sm select-none">
-                    <span class="italic text-xs">by</span>
-                    <span class="font-bold text-slate-700 tracking-widest">阿無</span>
-                </div>
             </div>
         </div>
     </header>
 
-    <!-- API Key 设置弹窗 (默认隐藏) -->
     <div id="settingsModal" class="hidden fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center transition-opacity">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 m-4 transform transition-transform">
             <div class="flex items-center justify-between mb-2">
@@ -123,12 +93,8 @@
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <p class="text-xs text-slate-500 mb-5 leading-relaxed">
-                请选择 AI 提供商并输入对应的 API Key。密钥将进行 Base64 混淆并保存在您当前浏览器的 LocalStorage 中，<strong class="text-slate-700">绝不会</strong>上传至任何第三方服务器。
-            </p>
             
             <div class="space-y-4 mb-6">
-                <!-- 提供商选择 -->
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1.5">AI 提供商</label>
                     <select id="providerSelect" onchange="handleProviderChange()" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-colors text-sm text-slate-700">
@@ -136,14 +102,10 @@
                         <option value="siliconflow">硅基流动 (SiliconFlow)</option>
                     </select>
                 </div>
-                
-                <!-- 模型名称输入 -->
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1.5">模型名称</label>
                     <input type="text" id="modelInput" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-colors text-sm font-mono text-slate-700">
                 </div>
-                
-                <!-- API Key 输入 -->
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1.5">API Key</label>
                     <input type="password" id="apiKeyInput" placeholder="请输入对应的 API Key..." class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-colors text-sm font-mono text-slate-700">
@@ -159,38 +121,30 @@
         </div>
     </div>
 
-    <!-- 主体双栏布局 -->
     <main class="flex-1 max-w-[1600px] w-full mx-auto p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 min-h-0">
-        
-        <!-- 左侧：编辑区 -->
         <div class="flex flex-col gap-3 h-full min-h-0">
             <div class="flex items-center justify-between px-1 shrink-0">
                 <div class="flex items-center gap-2 text-slate-600 text-sm font-semibold tracking-wide">
                     <i data-lucide="file-edit" class="w-4 h-4 text-indigo-500"></i> 原始文本
                 </div>
-                <!-- 清空输入按钮 -->
                 <button onclick="clearInput()" class="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-red-500 transition-colors px-2 py-1 rounded-md hover:bg-red-50">
                     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 清空
                 </button>
             </div>
-            <!-- 文本输入框 -->
-            <textarea id="editor" placeholder="在此输入或粘贴 Markdown 文本，系统将自动检查并格式化..." class="flex-1 w-full p-5 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none transition-all shadow-sm font-mono text-[15px] leading-relaxed text-slate-700"></textarea>
+            <textarea id="editor" placeholder="在此输入或粘贴 Markdown 文本，系统将自动检查并格式化..." class="flex-1 w-full p-6 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none transition-all shadow-sm text-slate-700"></textarea>
         </div>
 
-        <!-- 右侧：预览区 -->
         <div class="flex flex-col gap-3 h-full min-h-0">
             <div class="flex items-center justify-between px-1 shrink-0">
                 <div class="flex items-center gap-2 text-slate-600 text-sm font-semibold tracking-wide">
                     <i data-lucide="eye" class="w-4 h-4 text-emerald-500"></i> 预览结果
                 </div>
-                <!-- 一键复制按钮 -->
                 <button onclick="copyResult()" id="copyBtn" class="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors px-2 py-1 rounded-md hover:bg-indigo-50 opacity-0 pointer-events-none">
                     <i data-lucide="copy" class="w-3.5 h-3.5"></i> 复制纯净文本
                 </button>
             </div>
             
             <div class="relative flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                <!-- 空状态提示 -->
                 <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center p-8 text-center text-slate-400 bg-slate-50/50">
                     <div class="bg-white p-4 rounded-full shadow-sm mb-4">
                         <i data-lucide="sparkles" class="w-8 h-8 text-indigo-300"></i>
@@ -198,21 +152,14 @@
                     <p class="text-sm font-medium text-slate-500">在左侧输入文本</p>
                     <p class="text-xs text-slate-400 mt-1">右侧将自动渲染 Markdown 与 LaTeX，并高亮修正结果</p>
                 </div>
-                <!-- 渲染容器 -->
                 <div id="preview" class="flex-1 overflow-y-auto p-6 markdown-body hidden"></div>
             </div>
         </div>
     </main>
 
     <script>
-        // ==========================================
-        // 初始化图标
-        // ==========================================
         lucide.createIcons();
 
-        // ==========================================
-        // DOM 元素获取
-        // ==========================================
         const editor = document.getElementById('editor');
         const preview = document.getElementById('preview');
         const emptyState = document.getElementById('emptyState');
@@ -223,15 +170,10 @@
         const apiKeyInput = document.getElementById('apiKeyInput');
         const copyBtn = document.getElementById('copyBtn');
 
-        // ==========================================
-        // 状态变量
-        // ==========================================
         let debounceTimer;
-        let currentOutput = ''; // 保存纯净的 Markdown 源码用于复制
+        let currentOutput = '';
+        let currentAbortController = null; // 【修复2】新增：用于取消未完成的慢速 API 请求
 
-        // ==========================================
-        // AI 系统指令 (保持原有逻辑)
-        // ==========================================
         const SYSTEM_INSTRUCTION = `你是一个专业的 Markdown 格式审校专家。你的任务是接收用户输入的文本，修正其中的格式问题，并且必须将你修改过的每一个地方，用 <mark> 和 </mark> 标签包裹起来，以便前端进行高亮显示。
 
 你需要执行的格式检查和修改规则：
@@ -242,16 +184,11 @@
 
 输出要求：
 - 绝对不要输出除了处理后的文本之外的任何废话、问候语或解释。
-- 只返回经过修正并带有 <mark> 标签的最终 Markdown 字符串。
-- 示例输入：水分子是H2O，根据质能方程E=mc2，能量很大。
-- 示例输出：水分子是 <mark>$\\ce{H2O}$</mark><mark>，</mark>根据质能方程 <mark>$E=mc^2$</mark><mark>，</mark>能量很大。`;
+- 只返回经过修正并带有 <mark> 标签的最终 Markdown 字符串。`;
 
-        // ==========================================
-        // 配置管理 (LocalStorage 加密存储)
-        // ==========================================
+        // 配置默认模型（建议 Gemini 使用 1.5-flash 获取最快速度）
         const DEFAULT_MODELS = {
-            gemini: 'gemini-3-flash-preview',
-            // 默认使用 Qwen2.5 72B，用户可根据硅基流动支持的模型手动修改为 Qwen3.5 等
+            gemini: 'gemini-1.5-flash',
             siliconflow: 'Qwen/Qwen2.5-72B-Instruct' 
         };
 
@@ -289,41 +226,26 @@
             const model = modelInput.value.trim();
             const key = apiKeyInput.value.trim();
 
-            if (!key) {
-                alert('请输入有效的 API Key');
-                return;
-            }
-            if (!model) {
-                alert('请输入模型名称');
-                return;
-            }
+            if (!key) return alert('请输入有效的 API Key');
+            if (!model) return alert('请输入模型名称');
 
-            // 使用 btoa 简单混淆，避免明文存储
             localStorage.setItem('ai_provider', provider);
             localStorage.setItem('ai_model_' + provider, model);
             localStorage.setItem('api_key_' + provider, btoa(key));
 
             toggleSettings();
             setStatus('success', '配置已保存');
-            
-            // 如果当前有文本，立即触发一次检查
             if (editor.value.trim()) processText();
         }
 
-        // ==========================================
-        // 同步滚动逻辑
-        // ==========================================
-        let isSyncingLeft = false;
-        let isSyncingRight = false;
+        // 同步滚动
+        let isSyncingLeft = false, isSyncingRight = false;
 
         editor.addEventListener('scroll', () => {
             if (!isSyncingLeft) {
                 isSyncingRight = true;
                 const scrollable = editor.scrollHeight - editor.clientHeight;
-                if (scrollable > 0) {
-                    const percentage = editor.scrollTop / scrollable;
-                    preview.scrollTop = percentage * (preview.scrollHeight - preview.clientHeight);
-                }
+                if (scrollable > 0) preview.scrollTop = (editor.scrollTop / scrollable) * (preview.scrollHeight - preview.clientHeight);
             }
             isSyncingLeft = false;
         });
@@ -332,21 +254,14 @@
             if (!isSyncingRight) {
                 isSyncingLeft = true;
                 const scrollable = preview.scrollHeight - preview.clientHeight;
-                if (scrollable > 0) {
-                    const percentage = preview.scrollTop / scrollable;
-                    editor.scrollTop = percentage * (editor.scrollHeight - editor.clientHeight);
-                }
+                if (scrollable > 0) editor.scrollTop = (preview.scrollTop / scrollable) * (editor.scrollHeight - editor.clientHeight);
             }
             isSyncingRight = false;
         });
 
-        // ==========================================
-        // 状态 UI 更新
-        // ==========================================
         function setStatus(type, text) {
             statusIndicator.classList.remove('hidden');
-            let icon = '';
-            let colorClass = '';
+            let icon = '', colorClass = '';
             
             if (type === 'loading') {
                 icon = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
@@ -360,7 +275,7 @@
             } else {
                 icon = '<i data-lucide="check-circle-2" class="w-4 h-4"></i>';
                 colorClass = 'text-slate-500';
-                statusIndicator.classList.add('hidden'); // 空闲时隐藏
+                statusIndicator.classList.add('hidden');
             }
 
             statusIndicator.className = `md:flex items-center gap-2 text-sm font-medium transition-all duration-300 ${colorClass}`;
@@ -368,9 +283,6 @@
             lucide.createIcons();
         }
 
-        // ==========================================
-        // 核心逻辑：调用 AI 模型 API 并渲染
-        // ==========================================
         async function processText() {
             const text = editor.value;
             if (!text.trim()) {
@@ -388,18 +300,25 @@
                 return;
             }
 
+            // 【修复2】如果有正在运行的请求，立刻阻断它，防止网络拥堵
+            if (currentAbortController) {
+                currentAbortController.abort();
+            }
+            currentAbortController = new AbortController();
+            const signal = currentAbortController.signal;
+
             setStatus('loading', '正在自动检查...');
             preview.style.opacity = '0.5';
 
             try {
                 let resultText = '';
 
-                // 1. Google Gemini API 调用逻辑
                 if (provider === 'gemini') {
                     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
                     const response = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
+                        signal: signal, // 接入阻断信号
                         body: JSON.stringify({
                             systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
                             contents: [{ parts: [{ text }] }],
@@ -407,22 +326,15 @@
                         })
                     });
 
-                    if (!response.ok) {
-                        const errData = await response.json();
-                        throw new Error(errData.error?.message || 'Gemini API 请求失败');
-                    }
-                    const data = await response.json();
-                    resultText = data.candidates[0].content.parts[0].text;
+                    if (!response.ok) throw new Error((await response.json()).error?.message || 'API 请求失败');
+                    resultText = (await response.json()).candidates[0].content.parts[0].text;
                 } 
-                // 2. 硅基流动 (SiliconFlow) API 调用逻辑 (兼容 OpenAI 格式)
                 else if (provider === 'siliconflow') {
                     const url = `https://api.siliconflow.cn/v1/chat/completions`;
                     const response = await fetch(url, {
                         method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${key}`
-                        },
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+                        signal: signal, // 接入阻断信号
                         body: JSON.stringify({
                             model: model,
                             messages: [
@@ -433,12 +345,8 @@
                         })
                     });
 
-                    if (!response.ok) {
-                        const errData = await response.json();
-                        throw new Error(errData.message || '硅基流动 API 请求失败');
-                    }
-                    const data = await response.json();
-                    resultText = data.choices[0].message.content;
+                    if (!response.ok) throw new Error((await response.json()).message || 'API 请求失败');
+                    resultText = (await response.json()).choices[0].message.content;
                 }
 
                 currentOutput = resultText;
@@ -451,44 +359,39 @@
                 setStatus('success', '已优化');
 
             } catch (error) {
+                // 如果是被程序主动阻断的错误，不提示报错，默默忽略
+                if (error.name === 'AbortError') return;
+                
                 console.error(error);
                 setStatus('error', '检查失败: ' + error.message);
                 preview.style.opacity = '1';
             }
         }
 
-        // ==========================================
-        // 渲染 Markdown 和 LaTeX
-        // ==========================================
         function renderPreview(markdownText) {
-            // 预处理：提取 LaTeX 公式并替换为占位符，防止 marked 误解析下划线等符号
             const mathBlocks = [];
             let processedText = markdownText;
             
-            // 匹配 $$...$$ (跨行公式) 和 $...$ (行内公式)
-            const mathRegex = /(\$\$[\s\S]*?\$\$|\$(?!\s)[^\$]*?(?!\s)\$)/g;
+            // 【修复1】匹配 LaTeX，使用不会被 Markdown 识别的占位符格式
+            const mathRegex = /(\$\$[\s\S]*?\$\$|\$(?!\s)[^\$]*?(?!\s)\$|\\\[[\s\S]*?\\\]|\\\(.*?\\\))/g;
             
             processedText = processedText.replace(mathRegex, (match) => {
-                const placeholder = `__MATH_BLOCK_${mathBlocks.length}__`;
+                const placeholder = `@@MATHBLOCK${mathBlocks.length}@@`;
                 mathBlocks.push(match);
                 return placeholder;
             });
 
-            // 配置 marked 保持换行
             marked.setOptions({ breaks: true });
-            
-            // 1. 将 Markdown 渲染为 HTML
             let html = marked.parse(processedText);
             
-            // 还原 LaTeX 公式
+            // 还原 LaTeX 公式：使用 split 和 join 避免正则表达式特殊字符引发的问题
             mathBlocks.forEach((block, index) => {
-                const placeholder = `__MATH_BLOCK_${index}__`;
-                html = html.replace(placeholder, () => block);
+                const placeholder = `@@MATHBLOCK${index}@@`;
+                html = html.split(placeholder).join(block);
             });
 
             preview.innerHTML = html;
 
-            // 2. 调用 KaTeX 自动渲染 HTML 中的数学公式
             if (window.renderMathInElement) {
                 renderMathInElement(preview, {
                     delimiters: [
@@ -497,23 +400,18 @@
                         {left: '\\(', right: '\\)', display: false},
                         {left: '\\[', right: '\\]', display: true}
                     ],
-                    throwOnError: false, // 忽略语法错误，防止整个页面崩溃
+                    throwOnError: false,
                     output: 'html'
                 });
             }
         }
 
-        // ==========================================
-        // 事件监听
-        // ==========================================
-        
-        // 防抖输入监听
+        // 打字防抖时长略微延长至 1 秒，配合 AbortController 减少无效请求
         editor.addEventListener('input', () => {
             clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(processText, 800);
+            debounceTimer = setTimeout(processText, 1000);
         });
 
-        // 清空输入
         function clearInput() {
             editor.value = '';
             currentOutput = '';
@@ -524,10 +422,8 @@
             editor.focus();
         }
 
-        // 一键复制纯净结果
         function copyResult() {
             if (!currentOutput) return;
-            // 移除 <mark> 标签，保留纯净的 Markdown 源码
             const cleanText = currentOutput.replace(/<mark>|<\/mark>/g, '');
             navigator.clipboard.writeText(cleanText).then(() => {
                 const originalHtml = copyBtn.innerHTML;
