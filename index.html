@@ -100,8 +100,7 @@
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1.5">模型名称 (可下拉选择或手动输入)</label>
                     <input type="text" id="modelInput" list="modelOptions" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-colors text-sm font-mono text-slate-700" placeholder="点击右侧箭头选择...">
-                    <datalist id="modelOptions">
-                        </datalist>
+                    <datalist id="modelOptions"></datalist>
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1.5">API Key</label>
@@ -124,17 +123,11 @@
                 <div class="flex items-center gap-2 text-slate-600 text-sm font-semibold tracking-wide">
                     <i data-lucide="file-edit" class="w-4 h-4 text-indigo-500"></i> 原始文本
                 </div>
-                
-                <div class="flex items-center gap-2">
-                    <button onclick="clearInput()" class="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-red-500 transition-colors px-2 py-1.5 rounded-md hover:bg-red-50">
-                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 清空
-                    </button>
-                    <button id="checkBtn" onclick="processText()" class="flex items-center gap-1.5 text-xs font-medium text-white bg-indigo-500 hover:bg-indigo-600 shadow-sm transition-colors px-4 py-1.5 rounded-lg">
-                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> 开始检查
-                    </button>
-                </div>
+                <button onclick="clearInput()" class="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-red-500 transition-colors px-2 py-1.5 rounded-md hover:bg-red-50">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 清空
+                </button>
             </div>
-            <textarea id="editor" placeholder="在此输入或粘贴长篇 Markdown 文本。输入完毕后，点击右上角的【开始检查】按钮..." class="flex-1 w-full p-6 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none transition-all shadow-sm text-slate-700"></textarea>
+            <textarea id="editor" placeholder="在此输入或粘贴 Markdown 文本，停止打字后将自动检查..." class="flex-1 w-full p-6 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none transition-all shadow-sm text-slate-700"></textarea>
         </div>
 
         <div class="flex flex-col gap-3 h-full min-h-0">
@@ -152,8 +145,8 @@
                     <div class="bg-white p-4 rounded-full shadow-sm mb-4">
                         <i data-lucide="sparkles" class="w-8 h-8 text-indigo-300"></i>
                     </div>
-                    <p class="text-sm font-medium text-slate-500">等待处理</p>
-                    <p class="text-xs text-slate-400 mt-1">在左侧输入完成后，点击【开始检查】按钮</p>
+                    <p class="text-sm font-medium text-slate-500">等待输入</p>
+                    <p class="text-xs text-slate-400 mt-1">左侧输入停止后将自动渲染并高亮修正</p>
                 </div>
                 <div id="preview" class="flex-1 overflow-y-auto p-6 markdown-body hidden"></div>
             </div>
@@ -176,28 +169,31 @@
 
         let currentOutput = '';
         let currentAbortController = null;
-        let timerInterval = null;
-        let startTime = 0;
+        let debounceTimer; // 恢复防抖定时器
 
-        const SYSTEM_INSTRUCTION = `你是一个专业的 Markdown 格式审校专家。你的任务是接收用户输入的文本，修正其中的格式问题，并且必须将你修改过的每一个地方，用 <mark> 和 </mark> 标签包裹起来，以便前端进行高亮显示。
+        // 核心重构：用极度严厉的指令限制 AI 的发散性，修复乱加 mark 和乱改词语的 bug
+        const SYSTEM_INSTRUCTION = `你是一个严谨的 Markdown 格式审校程序。你的任务是接收原始文本，严格按照以下两条规则进行处理，并且**必须且只能**将修改过的地方用 <mark> 和 </mark> 标签包裹。
 
-你需要执行的格式检查和修改规则：
-1. 标点符号规范：确保中文语境下使用全角标点，英文和数字语境下使用半角标点。修正误用的全角/半角符号。
-2. 数学公式与符号：识别文本中的数学表达式和独立数学符号，将其转换为标准的 LaTeX 语法。行内公式使用单美元符号包围（例如 $x^2 + y^2 = z^2$），行间独立公式使用双美元符号包围（例如 $$E=mc^2$$）。
-3. 化学方程式：识别文本中的化学式和化学方程式，同样转换为 LaTeX 语法（例如使用 \\ce{} 宏包语法，或标准的上下标表示法）。
-4. 保持原文的换行和段落结构绝对不变，不要随意合并或拆分段落，以保证修改前后的文本行数和位置完全一致。
+【处理范围限制】（仅限以下两点，绝对不允许修改或标亮其他任何内容！）：
+1. 标点符号规范：检查全角与半角。中文语境下的标点修改为全角，英文和数字语境下的标点修改为半角。
+2. 数学与化学符号：将未使用 LaTeX 语法的数学式、数学符号、化学式、化学符号转换为标准的 LaTeX 语法。行内公式用 $...$，独立公式用 $$...$$，化学式用 \\ce{...}。
 
-输出要求：
-- 绝对不要输出除了处理后的文本之外的任何废话、问候语或解释。
-- 只返回经过修正并带有 <mark> 标签的最终 Markdown 字符串。`;
+【极其严格的红线要求】：
+- 绝对不准修改不需要格式化的常规文字。
+- 如果一个词语、句子或段落完全没有格式错误，**绝对不能**用 <mark> 标签包裹它。
+- <mark> 标签只能紧紧包裹在你修改过的那个标点或那个公式上。
+- 保持原文的换行、段落和空格结构绝对不变。
+- 只输出处理后的文本，不要带有任何解释或废话。
 
-        // 默认模型清单
+【正反示例】：
+错误处理示范 (乱加标亮)：<mark>水分子是</mark> $\\ce{H2O}$。
+正确处理示范 (精准标亮)：水分子是 <mark>$\\ce{H2O}$</mark><mark>，</mark>质能方程 <mark>$E=mc^2$</mark>。`;
+
         const DEFAULT_MODELS = {
             gemini: 'gemini-1.5-flash',
-            siliconflow: 'Qwen/Qwen2.5-72B-Instruct' 
+            siliconflow: 'deepseek-ai/DeepSeek-V3' // 默认设为一个强力的模型
         };
 
-        // 供下拉列表使用的可选模型
         const MODEL_LISTS = {
             gemini: [
                 'gemini-1.5-flash',
@@ -205,10 +201,11 @@
                 'gemini-2.0-flash'
             ],
             siliconflow: [
+                'deepseek-ai/DeepSeek-V3.1-Terminus', // 新增模型
+                'deepseek-ai/DeepSeek-V3',
                 'Qwen/Qwen2.5-72B-Instruct',
                 'Qwen/Qwen2.5-32B-Instruct',
-                'Qwen/Qwen3.5-72B-Instruct', // 为未来的 Qwen3.5 预留
-                'deepseek-ai/DeepSeek-V3',
+                'Qwen/Qwen3.5-72B-Instruct', 
                 'THUDM/glm-4-9b-chat'
             ]
         };
@@ -268,6 +265,7 @@
 
             toggleSettings();
             setStatus('success', '配置已保存');
+            if (editor.value.trim()) processText();
         }
 
         let isSyncingLeft = false, isSyncingRight = false;
@@ -290,21 +288,6 @@
             isSyncingRight = false;
         });
 
-        // 定时器控件
-        function startTimer() {
-            clearInterval(timerInterval);
-            startTime = Date.now();
-            timerInterval = setInterval(() => {
-                const seconds = Math.floor((Date.now() - startTime) / 1000);
-                const timerSpan = document.getElementById('loadingTimer');
-                if(timerSpan) timerSpan.innerText = ` ${seconds}s`;
-            }, 1000);
-        }
-
-        function stopTimer() {
-            clearInterval(timerInterval);
-        }
-
         function setStatus(type, text) {
             statusIndicator.classList.remove('hidden');
             let icon = '', colorClass = '';
@@ -312,22 +295,16 @@
             if (type === 'loading') {
                 icon = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
                 colorClass = 'text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full';
-                // 加一个专门显示时间的 span
-                text = `${text} <span id="loadingTimer" class="font-mono text-xs text-indigo-400 ml-1"> 0s</span>`;
-                startTimer();
+            } else if (type === 'success') {
+                icon = '<i data-lucide="check-circle-2" class="w-4 h-4"></i>';
+                colorClass = 'text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full';
+            } else if (type === 'error') {
+                icon = '<i data-lucide="alert-circle" class="w-4 h-4"></i>';
+                colorClass = 'text-red-600 bg-red-50 px-3 py-1.5 rounded-full';
             } else {
-                stopTimer();
-                if (type === 'success') {
-                    icon = '<i data-lucide="check-circle-2" class="w-4 h-4"></i>';
-                    colorClass = 'text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full';
-                } else if (type === 'error') {
-                    icon = '<i data-lucide="alert-circle" class="w-4 h-4"></i>';
-                    colorClass = 'text-red-600 bg-red-50 px-3 py-1.5 rounded-full';
-                } else {
-                    icon = '<i data-lucide="check-circle-2" class="w-4 h-4"></i>';
-                    colorClass = 'text-slate-500';
-                    statusIndicator.classList.add('hidden');
-                }
+                icon = '<i data-lucide="check-circle-2" class="w-4 h-4"></i>';
+                colorClass = 'text-slate-500';
+                statusIndicator.classList.add('hidden');
             }
 
             statusIndicator.className = `md:flex items-center gap-2 text-sm font-medium transition-all duration-300 ${colorClass}`;
@@ -352,17 +329,15 @@
                 return;
             }
 
+            // 核心功能：如果有还在路上的请求，立刻掐断！保证极速响应
             if (currentAbortController) {
                 currentAbortController.abort();
             }
             currentAbortController = new AbortController();
             const signal = currentAbortController.signal;
 
-            setStatus('loading', '正在处理，请稍候...');
+            setStatus('loading', '正在自动检查...');
             preview.style.opacity = '0.5';
-            const btn = document.getElementById('checkBtn');
-            btn.disabled = true;
-            btn.classList.add('opacity-50', 'cursor-not-allowed');
 
             try {
                 let resultText = '';
@@ -413,13 +388,10 @@
                 setStatus('success', '已优化');
 
             } catch (error) {
-                if (error.name === 'AbortError') return;
+                if (error.name === 'AbortError') return; // 用户还在打字，忽略被掐断的报错
                 console.error(error);
                 setStatus('error', '检查失败: ' + error.message);
                 preview.style.opacity = '1';
-            } finally {
-                btn.disabled = false;
-                btn.classList.remove('opacity-50', 'cursor-not-allowed');
             }
         }
 
@@ -459,7 +431,11 @@
             }
         }
 
-        // 彻底移除防抖打字监听代码，交给按钮控制
+        // 恢复自动防抖监听（停顿 1.2 秒后自动发送，配合 AbortController 绝不拥堵）
+        editor.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(processText, 1200); 
+        });
 
         function clearInput() {
             editor.value = '';
