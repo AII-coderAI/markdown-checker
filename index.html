@@ -93,6 +93,7 @@
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1.5">AI 提供商</label>
                     <select id="providerSelect" onchange="handleProviderChange()" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-colors text-sm text-slate-700">
+                        <option value="aliyun">阿里云百炼 (DashScope)</option>
                         <option value="gemini">Google Gemini</option>
                         <option value="siliconflow">硅基流动 (SiliconFlow)</option>
                     </select>
@@ -185,35 +186,46 @@
 - 保持原文的换行、段落和空格结构绝对不变。
 - 只输出处理后的纯文本，不要带有任何解释或废话。`;
 
-        // 更新默认模型配置
+        // 加入阿里云百炼默认配置
         const DEFAULT_MODELS = {
+            aliyun: 'qwen-plus', // 阿里云的主力高性价比模型
             gemini: 'gemini-1.5-flash',
-            siliconflow: 'Qwen/Qwen3-VL-235B-A22B-Thinking' // 更新默认的硅基流动模型
+            siliconflow: 'Qwen/Qwen3-VL-235B-A22B-Thinking'
         };
 
         const MODEL_LISTS = {
+            aliyun: [
+                'qwen-plus',
+                'qwen-turbo',
+                'qwen-max',
+                'qwen2.5-72b-instruct'
+            ],
             gemini: [
                 'gemini-1.5-flash',
                 'gemini-1.5-pro',
                 'gemini-2.0-flash'
             ],
             siliconflow: [
-                'Qwen/Qwen3-VL-235B-A22B-Thinking', // 新增并置顶
+                'Qwen/Qwen3-VL-235B-A22B-Thinking',
                 'deepseek-ai/DeepSeek-V3.1-Terminus',
                 'deepseek-ai/DeepSeek-V3',
                 'Qwen/Qwen2.5-72B-Instruct',
-                'Qwen/Qwen2.5-32B-Instruct',
-                'Qwen/Qwen3.5-72B-Instruct', 
                 'THUDM/glm-4-9b-chat'
             ]
         };
 
-        // 【核心修复】升级了本地存储的 Key (加了 _v2)，强行清空旧的无效硅基流动配置，重置为 Gemini
+        // 强行刷新缓存版本号至 v3，注入阿里云配置
         function getSettings() {
-            const provider = localStorage.getItem('ai_provider_v2') || 'gemini';
-            const model = localStorage.getItem('ai_model_v2_' + provider) || DEFAULT_MODELS[provider];
-            const encodedKey = localStorage.getItem('api_key_v2_' + provider);
-            const key = encodedKey ? atob(encodedKey) : '';
+            const provider = localStorage.getItem('ai_provider_v3') || 'aliyun';
+            const model = localStorage.getItem('ai_model_v3_' + provider) || DEFAULT_MODELS[provider];
+            let encodedKey = localStorage.getItem('api_key_v3_' + provider);
+            let key = encodedKey ? atob(encodedKey) : '';
+
+            // 【专属定制】如果没有检测到密钥且提供商是百炼，自动填入你提供的 Key
+            if (provider === 'aliyun' && !key) {
+                key = 'sk-c444d20f38bb42579b386edad32c7810';
+            }
+
             return { provider, model, key };
         }
 
@@ -230,11 +242,14 @@
             const provider = providerSelect.value;
             populateModelList(provider);
             
-            const savedModel = localStorage.getItem('ai_model_v2_' + provider);
+            const savedModel = localStorage.getItem('ai_model_v3_' + provider);
             modelInput.value = savedModel || DEFAULT_MODELS[provider];
             
-            const encodedKey = localStorage.getItem('api_key_v2_' + provider);
-            apiKeyInput.value = encodedKey ? atob(encodedKey) : '';
+            const encodedKey = localStorage.getItem('api_key_v3_' + provider);
+            let keyToFill = encodedKey ? atob(encodedKey) : '';
+            // 切换回 aliyun 时自动填充
+            if (provider === 'aliyun' && !keyToFill) keyToFill = 'sk-c444d20f38bb42579b386edad32c7810';
+            apiKeyInput.value = keyToFill;
         }
 
         function toggleSettings() {
@@ -258,9 +273,9 @@
             if (!key) return alert('请输入有效的 API Key');
             if (!model) return alert('请输入模型名称');
 
-            localStorage.setItem('ai_provider_v2', provider);
-            localStorage.setItem('ai_model_v2_' + provider, model);
-            localStorage.setItem('api_key_v2_' + provider, btoa(key));
+            localStorage.setItem('ai_provider_v3', provider);
+            localStorage.setItem('ai_model_v3_' + provider, model);
+            localStorage.setItem('api_key_v3_' + provider, btoa(key));
 
             toggleSettings();
             setStatus('success', '配置已保存');
@@ -356,8 +371,12 @@
                     if (!response.ok) throw new Error((await response.json()).error?.message || 'API 请求失败');
                     resultText = (await response.json()).candidates[0].content.parts[0].text;
                 } 
-                else if (provider === 'siliconflow') {
-                    const url = `https://api.siliconflow.cn/v1/chat/completions`;
+                else if (provider === 'siliconflow' || provider === 'aliyun') {
+                    // 动态切换硅基流动与阿里云百炼的请求地址
+                    const url = provider === 'aliyun' 
+                        ? 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'
+                        : 'https://api.siliconflow.cn/v1/chat/completions';
+                        
                     const response = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
@@ -372,7 +391,10 @@
                         })
                     });
 
-                    if (!response.ok) throw new Error((await response.json()).message || 'API 请求失败');
+                    if (!response.ok) {
+                        const errData = await response.json();
+                        throw new Error(errData.message || errData.error?.message || 'API 请求失败');
+                    }
                     resultText = (await response.json()).choices[0].message.content;
                 }
 
