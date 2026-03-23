@@ -19,7 +19,7 @@
             padding: 0.125rem 0.25rem; 
             border-radius: 0.25rem; 
             transition: background-color 0.2s;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; /* 强制等宽字体 */
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         }
         mark:hover { background-color: #facc15; }
 
@@ -34,7 +34,7 @@
             font-size: 15px; 
             line-height: 1.7; 
             color: #334155; 
-            white-space: pre-wrap; /* 更好地保留换行符 */
+            white-space: pre-wrap;
         }
         .markdown-body p { margin-bottom: 1.7em; } 
         .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 600; color: #0f172a; margin-top: 1.7em; margin-bottom: 0.85em; }
@@ -176,17 +176,19 @@
         let currentOutput = '';
         let currentAbortController = null;
 
+        // 【核心修改】极其严苛的高亮规则和符号识别规则，附带正反面示例
         const SYSTEM_INSTRUCTION = `你是一个严谨的 Markdown 格式审校程序。你的任务是接收原始文本，严格按照以下规则处理，并且必须且只能将【真正修改过】的地方用 <mark> 和 </mark> 标签包裹。
 
-【处理范围限制】（仅限以下两点，绝对不允许修改或标亮其他任何内容！）：
+【处理范围限制】（绝对不允许修改或标亮以下两点之外的任何内容！）：
 1. 标点符号替换：将文中所有的中文逗号“，”全部替换为英文逗号“,”；将所有的中文句号“。”全部替换为英文句号“.”。
-2. 严格的 LaTeX 转换：精准识别文本中所有未规范书写的化学式（如 H2O）、数学公式、独立化学方程式、上下标（如 m2, O2）、反应箭头（如 ->, =>）、特殊数学/科学符号等，将它们严格转换为标准的 LaTeX 语法。行内公式用 $...$，独立公式用 $$...$$，化学式用 \\ce{...}。
+2. 严格的 LaTeX 转换：精准识别文本中所有未规范书写的化学式（如 H2O）、数学公式、上标下标（如 m2, O2, x_1）、左右箭头（如 ->, =>, <->）、特殊数学/科学符号等，将它们严格转换为标准的 LaTeX 语法。行内公式用 $...$，独立公式用 $$...$$，化学式必须用 \\ce{...}。
 
-【极其严格的红线要求】：
-- 绝对不准修改不需要格式化的常规文字。
-- 如果原文中的公式【已经使用了】正确的 LaTeX 语法，绝对不能用 <mark> 标签包裹它！直接原样输出。
+【极其严格的高亮 (<mark>) 要求】：
+- 凡是进行了 LaTeX 转换的地方，**必须**将完整的 LaTeX 代码（连同外层的 $ 或 $$ 符号）用 <mark> 标签完整包裹！
+- 【正确示范】：水分子是 <mark>$\\ce{H2O}$</mark><mark>,</mark> 反应为 <mark>$A \\rightarrow B$</mark><mark>.</mark>
+- 【错误示范】（千万不要把 mark 写在 $ 里面！）：$<mark>\\ce{H2O}</mark>$
+- 如果原文中的公式【已经使用了】正确的 LaTeX 语法，绝对不能用 <mark> 包裹它！直接原样输出。
 - 绝对不能用 <mark> 标签包裹纯空白字符（如空格、换行符）。
-- <mark> 标签只能紧紧包裹在你真正做出了修改的错用标点或转换后的 LaTeX 公式上。
 - 保持原文的换行、段落和空格结构绝对不变。
 - 只输出处理后的纯文本，不要带有任何解释或废话。`;
 
@@ -401,6 +403,7 @@
                     resultText = (await response.json()).choices[0].message.content;
                 }
 
+                // 前端兜底：剔除包含纯空白或换行符的 mark 标签
                 resultText = resultText.replace(/<mark>([\s\n]+)<\/mark>/g, '$1');
                 resultText = resultText.replace(/<mark><\/mark>/g, '');
 
@@ -430,12 +433,11 @@
             const mathBlocks = [];
             let processedText = markdownText;
             
-            // 核心修改：提取并保护包含 LaTeX 语法的模块，防止被 Marked.js 解析掉下划线等符号
-            const mathRegex = /(\$\$[\s\S]*?\$\$|\$(?!\s)[^\$]*?(?!\s)\$|\\\[[\s\S]*?\\\]|\\\(.*?\\\))/g;
+            // 提取并保护包含 LaTeX 语法的模块（包括可能被 <mark> 包裹的情况）
+            const mathRegex = /(<mark>\$\$[\s\S]*?\$\$<\/mark>|<mark>\$(?!\s)[^\$]*?(?!\s)\$<\/mark>|<mark>\\\[[\s\S]*?\\\]<\/mark>|<mark>\\\(.*?\\\)<\/mark>|\$\$[\s\S]*?\$\$|\$(?!\s)[^\$]*?(?!\s)\$|\\\[[\s\S]*?\\\]|\\\(.*?\\\))/g;
             
             processedText = processedText.replace(mathRegex, (match) => {
                 const placeholder = `@@MATHBLOCK${mathBlocks.length}@@`;
-                // 将 < 和 > 以及 & 转义，确保公式代码以纯文本正确显示
                 const safeMatch = match.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 mathBlocks.push(safeMatch);
                 return placeholder;
@@ -444,13 +446,13 @@
             marked.setOptions({ breaks: true });
             let html = marked.parse(processedText);
             
-            // 将保护好的纯文本代码还原回 HTML
+            // 将保护好的纯文本代码还原回 HTML，并将刚才转移的 <mark> 标签恢复回来
             mathBlocks.forEach((block, index) => {
                 const placeholder = `@@MATHBLOCK${index}@@`;
-                html = html.split(placeholder).join(block);
+                const restoredBlock = block.replace(/&lt;mark&gt;/g, '<mark>').replace(/&lt;\/mark&gt;/g, '</mark>');
+                html = html.split(placeholder).join(restoredBlock);
             });
 
-            // 取消了 KaTeX 引擎渲染，直接输出纯代码到页面
             preview.innerHTML = html;
         }
 
