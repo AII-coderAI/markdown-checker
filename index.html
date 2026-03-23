@@ -7,21 +7,19 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/mhchem.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
         body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
         
+        /* 标亮样式：更加显眼的黄色背景，保留代码风格 */
         mark { 
             background-color: #fde047; 
             color: #0f172a; 
             padding: 0.125rem 0.25rem; 
             border-radius: 0.25rem; 
             transition: background-color 0.2s;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; /* 强制等宽字体 */
         }
         mark:hover { background-color: #facc15; }
 
@@ -36,6 +34,7 @@
             font-size: 15px; 
             line-height: 1.7; 
             color: #334155; 
+            white-space: pre-wrap; /* 更好地保留换行符 */
         }
         .markdown-body p { margin-bottom: 1.7em; } 
         .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 600; color: #0f172a; margin-top: 1.7em; margin-bottom: 0.85em; }
@@ -139,7 +138,7 @@
         <div class="flex flex-col gap-3 h-full min-h-0">
             <div class="flex items-center justify-between px-1 shrink-0">
                 <div class="flex items-center gap-2 text-slate-600 text-sm font-semibold tracking-wide">
-                    <i data-lucide="eye" class="w-4 h-4 text-emerald-500"></i> 预览结果
+                    <i data-lucide="eye" class="w-4 h-4 text-emerald-500"></i> 预览结果 (纯源码展示)
                 </div>
                 <button onclick="copyResult()" id="copyBtn" class="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors px-2 py-1 rounded-md hover:bg-indigo-50 opacity-0 pointer-events-none">
                     <i data-lucide="copy" class="w-3.5 h-3.5"></i> 复制纯净文本
@@ -177,7 +176,6 @@
         let currentOutput = '';
         let currentAbortController = null;
 
-        // 【核心修改】精准要求处理化学式、上下标、特殊符号及标点，严格控制只高亮修改处
         const SYSTEM_INSTRUCTION = `你是一个严谨的 Markdown 格式审校程序。你的任务是接收原始文本，严格按照以下规则处理，并且必须且只能将【真正修改过】的地方用 <mark> 和 </mark> 标签包裹。
 
 【处理范围限制】（仅限以下两点，绝对不允许修改或标亮其他任何内容！）：
@@ -220,12 +218,11 @@
         };
 
         function getSettings() {
-            const provider = localStorage.getItem('ai_provider_v3') || 'aliyun';
-            const model = localStorage.getItem('ai_model_v3_' + provider) || DEFAULT_MODELS[provider];
-            let encodedKey = localStorage.getItem('api_key_v3_' + provider);
+            const provider = localStorage.getItem('ai_provider_v4') || 'aliyun';
+            const model = localStorage.getItem('ai_model_v4_' + provider) || DEFAULT_MODELS[provider];
+            let encodedKey = localStorage.getItem('api_key_v4_' + provider);
             let key = encodedKey ? atob(encodedKey) : '';
 
-            // 专属定制：阿里云百炼默认 Key
             if (provider === 'aliyun' && !key) {
                 key = 'sk-c444d20f38bb42579b386edad32c7810';
             }
@@ -246,10 +243,10 @@
             const provider = providerSelect.value;
             populateModelList(provider);
             
-            const savedModel = localStorage.getItem('ai_model_v3_' + provider);
+            const savedModel = localStorage.getItem('ai_model_v4_' + provider);
             modelInput.value = savedModel || DEFAULT_MODELS[provider];
             
-            const encodedKey = localStorage.getItem('api_key_v3_' + provider);
+            const encodedKey = localStorage.getItem('api_key_v4_' + provider);
             let keyToFill = encodedKey ? atob(encodedKey) : '';
             if (provider === 'aliyun' && !keyToFill) keyToFill = 'sk-c444d20f38bb42579b386edad32c7810';
             apiKeyInput.value = keyToFill;
@@ -276,9 +273,9 @@
             if (!key) return alert('请输入有效的 API Key');
             if (!model) return alert('请输入模型名称');
 
-            localStorage.setItem('ai_provider_v3', provider);
-            localStorage.setItem('ai_model_v3_' + provider, model);
-            localStorage.setItem('api_key_v3_' + provider, btoa(key));
+            localStorage.setItem('ai_provider_v4', provider);
+            localStorage.setItem('ai_model_v4_' + provider, model);
+            localStorage.setItem('api_key_v4_' + provider, btoa(key));
 
             toggleSettings();
             setStatus('success', '配置已保存');
@@ -354,7 +351,6 @@
             setStatus('loading', '正在处理检查...');
             preview.style.opacity = '0.5';
             
-            // 锁定按钮状态
             if (checkBtn) {
                 checkBtn.disabled = true;
                 checkBtn.classList.add('opacity-50', 'cursor-not-allowed');
@@ -405,7 +401,6 @@
                     resultText = (await response.json()).choices[0].message.content;
                 }
 
-                // 清理多余空行或纯空白 mark 标签
                 resultText = resultText.replace(/<mark>([\s\n]+)<\/mark>/g, '$1');
                 resultText = resultText.replace(/<mark><\/mark>/g, '');
 
@@ -424,7 +419,6 @@
                 setStatus('error', '检查失败: ' + error.message);
                 preview.style.opacity = '1';
             } finally {
-                // 恢复按钮状态
                 if (checkBtn) {
                     checkBtn.disabled = false;
                     checkBtn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -436,36 +430,28 @@
             const mathBlocks = [];
             let processedText = markdownText;
             
+            // 核心修改：提取并保护包含 LaTeX 语法的模块，防止被 Marked.js 解析掉下划线等符号
             const mathRegex = /(\$\$[\s\S]*?\$\$|\$(?!\s)[^\$]*?(?!\s)\$|\\\[[\s\S]*?\\\]|\\\(.*?\\\))/g;
             
             processedText = processedText.replace(mathRegex, (match) => {
                 const placeholder = `@@MATHBLOCK${mathBlocks.length}@@`;
-                mathBlocks.push(match);
+                // 将 < 和 > 以及 & 转义，确保公式代码以纯文本正确显示
+                const safeMatch = match.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                mathBlocks.push(safeMatch);
                 return placeholder;
             });
 
             marked.setOptions({ breaks: true });
             let html = marked.parse(processedText);
             
+            // 将保护好的纯文本代码还原回 HTML
             mathBlocks.forEach((block, index) => {
                 const placeholder = `@@MATHBLOCK${index}@@`;
                 html = html.split(placeholder).join(block);
             });
 
+            // 取消了 KaTeX 引擎渲染，直接输出纯代码到页面
             preview.innerHTML = html;
-
-            if (window.renderMathInElement) {
-                renderMathInElement(preview, {
-                    delimiters: [
-                        {left: '$$', right: '$$', display: true},
-                        {left: '$', right: '$', display: false},
-                        {left: '\\(', right: '\\)', display: false},
-                        {left: '\\[', right: '\\]', display: true}
-                    ],
-                    throwOnError: false,
-                    output: 'html'
-                });
-            }
         }
 
         function clearInput() {
