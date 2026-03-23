@@ -124,11 +124,16 @@
                 <div class="flex items-center gap-2 text-slate-600 text-sm font-semibold tracking-wide">
                     <i data-lucide="file-edit" class="w-4 h-4 text-indigo-500"></i> 原始文本
                 </div>
-                <button onclick="clearInput()" class="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-red-500 transition-colors px-2 py-1.5 rounded-md hover:bg-red-50">
-                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 清空
-                </button>
+                <div class="flex items-center gap-2">
+                    <button onclick="clearInput()" class="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-red-500 transition-colors px-2 py-1.5 rounded-md hover:bg-red-50">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 清空
+                    </button>
+                    <button id="checkBtn" onclick="processText()" class="flex items-center gap-1.5 text-xs font-medium text-white bg-indigo-500 hover:bg-indigo-600 shadow-sm transition-colors px-4 py-1.5 rounded-lg">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> 开始检查
+                    </button>
+                </div>
             </div>
-            <textarea id="editor" placeholder="在此输入或粘贴 Markdown 文本，停止打字后将自动检查..." class="flex-1 w-full p-6 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none transition-all shadow-sm text-slate-700"></textarea>
+            <textarea id="editor" placeholder="在此输入或粘贴 Markdown 文本。输入完毕后，点击右上角的【开始检查】按钮..." class="flex-1 w-full p-6 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none transition-all shadow-sm text-slate-700"></textarea>
         </div>
 
         <div class="flex flex-col gap-3 h-full min-h-0">
@@ -146,8 +151,8 @@
                     <div class="bg-white p-4 rounded-full shadow-sm mb-4">
                         <i data-lucide="sparkles" class="w-8 h-8 text-indigo-300"></i>
                     </div>
-                    <p class="text-sm font-medium text-slate-500">等待输入</p>
-                    <p class="text-xs text-slate-400 mt-1">左侧输入停止后将自动渲染并高亮修正</p>
+                    <p class="text-sm font-medium text-slate-500">等待检查</p>
+                    <p class="text-xs text-slate-400 mt-1">左侧输入完成后，点击【开始检查】按钮进行处理</p>
                 </div>
                 <div id="preview" class="flex-1 overflow-y-auto p-6 markdown-body hidden"></div>
             </div>
@@ -167,28 +172,28 @@
         const apiKeyInput = document.getElementById('apiKeyInput');
         const copyBtn = document.getElementById('copyBtn');
         const modelOptions = document.getElementById('modelOptions');
+        const checkBtn = document.getElementById('checkBtn');
 
         let currentOutput = '';
         let currentAbortController = null;
-        let debounceTimer; 
 
+        // 【核心修改】精准要求处理化学式、上下标、特殊符号及标点，严格控制只高亮修改处
         const SYSTEM_INSTRUCTION = `你是一个严谨的 Markdown 格式审校程序。你的任务是接收原始文本，严格按照以下规则处理，并且必须且只能将【真正修改过】的地方用 <mark> 和 </mark> 标签包裹。
 
 【处理范围限制】（仅限以下两点，绝对不允许修改或标亮其他任何内容！）：
-1. 标点符号规范：中文语境下的标点修改为全角，英文和数字语境下的标点修改为半角。
-2. 数学与化学符号：将【未使用】 LaTeX 语法的数学式、化学式转换为标准的 LaTeX 语法（行内公式用 $...$，独立公式用 $$...$$，化学式用 \\ce{...}）。
+1. 标点符号替换：将文中所有的中文逗号“，”全部替换为英文逗号“,”；将所有的中文句号“。”全部替换为英文句号“.”。
+2. 严格的 LaTeX 转换：精准识别文本中所有未规范书写的化学式（如 H2O）、数学公式、独立化学方程式、上下标（如 m2, O2）、反应箭头（如 ->, =>）、特殊数学/科学符号等，将它们严格转换为标准的 LaTeX 语法。行内公式用 $...$，独立公式用 $$...$$，化学式用 \\ce{...}。
 
 【极其严格的红线要求】：
 - 绝对不准修改不需要格式化的常规文字。
-- 如果原文中的数学式或化学式【已经使用了】正确的 LaTeX 语法，绝对不能用 <mark> 标签包裹它！直接原样输出。
+- 如果原文中的公式【已经使用了】正确的 LaTeX 语法，绝对不能用 <mark> 标签包裹它！直接原样输出。
 - 绝对不能用 <mark> 标签包裹纯空白字符（如空格、换行符）。
-- <mark> 标签只能紧紧包裹在你真正做出了修改的错用标点或转换后的公式上。
+- <mark> 标签只能紧紧包裹在你真正做出了修改的错用标点或转换后的 LaTeX 公式上。
 - 保持原文的换行、段落和空格结构绝对不变。
 - 只输出处理后的纯文本，不要带有任何解释或废话。`;
 
-        // 加入阿里云百炼默认配置
         const DEFAULT_MODELS = {
-            aliyun: 'qwen-plus', // 阿里云的主力高性价比模型
+            aliyun: 'qwen-plus', 
             gemini: 'gemini-1.5-flash',
             siliconflow: 'Qwen/Qwen3-VL-235B-A22B-Thinking'
         };
@@ -214,14 +219,13 @@
             ]
         };
 
-        // 强行刷新缓存版本号至 v3，注入阿里云配置
         function getSettings() {
             const provider = localStorage.getItem('ai_provider_v3') || 'aliyun';
             const model = localStorage.getItem('ai_model_v3_' + provider) || DEFAULT_MODELS[provider];
             let encodedKey = localStorage.getItem('api_key_v3_' + provider);
             let key = encodedKey ? atob(encodedKey) : '';
 
-            // 【专属定制】如果没有检测到密钥且提供商是百炼，自动填入你提供的 Key
+            // 专属定制：阿里云百炼默认 Key
             if (provider === 'aliyun' && !key) {
                 key = 'sk-c444d20f38bb42579b386edad32c7810';
             }
@@ -247,7 +251,6 @@
             
             const encodedKey = localStorage.getItem('api_key_v3_' + provider);
             let keyToFill = encodedKey ? atob(encodedKey) : '';
-            // 切换回 aliyun 时自动填充
             if (provider === 'aliyun' && !keyToFill) keyToFill = 'sk-c444d20f38bb42579b386edad32c7810';
             apiKeyInput.value = keyToFill;
         }
@@ -279,7 +282,6 @@
 
             toggleSettings();
             setStatus('success', '配置已保存');
-            if (editor.value.trim()) processText();
         }
 
         let isSyncingLeft = false, isSyncingRight = false;
@@ -349,8 +351,14 @@
             currentAbortController = new AbortController();
             const signal = currentAbortController.signal;
 
-            setStatus('loading', '正在自动检查...');
+            setStatus('loading', '正在处理检查...');
             preview.style.opacity = '0.5';
+            
+            // 锁定按钮状态
+            if (checkBtn) {
+                checkBtn.disabled = true;
+                checkBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
 
             try {
                 let resultText = '';
@@ -372,7 +380,6 @@
                     resultText = (await response.json()).candidates[0].content.parts[0].text;
                 } 
                 else if (provider === 'siliconflow' || provider === 'aliyun') {
-                    // 动态切换硅基流动与阿里云百炼的请求地址
                     const url = provider === 'aliyun' 
                         ? 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'
                         : 'https://api.siliconflow.cn/v1/chat/completions';
@@ -398,7 +405,7 @@
                     resultText = (await response.json()).choices[0].message.content;
                 }
 
-                // 剔除包含纯空白或换行符的 mark 标签
+                // 清理多余空行或纯空白 mark 标签
                 resultText = resultText.replace(/<mark>([\s\n]+)<\/mark>/g, '$1');
                 resultText = resultText.replace(/<mark><\/mark>/g, '');
 
@@ -409,13 +416,19 @@
                 preview.classList.remove('hidden');
                 copyBtn.classList.remove('opacity-0', 'pointer-events-none');
                 preview.style.opacity = '1';
-                setStatus('success', '已优化');
+                setStatus('success', '已完成格式校对');
 
             } catch (error) {
                 if (error.name === 'AbortError') return; 
                 console.error(error);
                 setStatus('error', '检查失败: ' + error.message);
                 preview.style.opacity = '1';
+            } finally {
+                // 恢复按钮状态
+                if (checkBtn) {
+                    checkBtn.disabled = false;
+                    checkBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
             }
         }
 
@@ -454,11 +467,6 @@
                 });
             }
         }
-
-        editor.addEventListener('input', () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(processText, 1200); 
-        });
 
         function clearInput() {
             editor.value = '';
